@@ -60,7 +60,9 @@
 
 <script src="/assets/account.js"></script>
 <script src="/assets/store.js"></script>
-<script>
+<script type="module">
+import { distribute, combine, DEFAULT_SPLIT, money as cents } from '/assets/split.js';
+
 (function () {
   const view = document.getElementById('view');
   const id = new URLSearchParams(location.search).get('id');
@@ -81,6 +83,21 @@
 
   document.getElementById('inv').textContent = order.invoiceId || 'Receipt';
 
+  // per-line split, computed from the listing's own shares (or the default if it has none)
+  const sheets = [];
+  const splitFor = (item) => {
+    try {
+      const total = Math.round(Number(item.price || 0) * 100) * Number(item.qty || 1);
+      const sheet = distribute(total, (item.split && item.split.length ? item.split : DEFAULT_SPLIT));
+      sheets.push(sheet);
+      return sheet;
+    } catch (e) { return null; }
+  };
+
+  // compute the split for every line before rendering — defining the helper is not the same as
+  // calling it, which is exactly how the first version shipped an empty split panel
+  (order.items || []).forEach((i) => splitFor(i));
+
   const lines = (order.items || []).map((i) => `
     <tr><td>${i.title || i.name || 'item'}</td><td class="money">${i.qty || 1}</td>
     <td class="money">${money(i.price)}</td><td class="money">${money((i.price || 0) * (i.qty || 1))}</td></tr>`).join('');
@@ -96,6 +113,16 @@
         : '<div class="dim" style="margin-top:.4rem;font-size:.66rem">no maker signature on this item</div>'}
     </div>`).join('');
 
+  const sheetRows = (() => {
+    try { return combine(sheets); } catch (e) { return null; }
+  })();
+
+  const splitRows = sheetRows ? sheetRows.rows.map((r) => {
+    const makerDid = (order.proofs || []).map((p) => p.signedBy).filter(Boolean)[0];
+    return `<dl class="kv"><dt>${(r.label || r.key)}${r.key === 'maker' && makerDid ? ' · ' + makerDid.slice(0, 22) + '…' : ''}</dt>
+      <dd>${cents(r.amount)} <span style="color:#565270">(${(r.bps / 100).toFixed(1)}%)</span></dd></dl>`;
+  }).join('') : '';
+
   view.innerHTML = `
     <div class="panel">
       <h2>Order</h2>
@@ -105,6 +132,16 @@
       <table><thead><tr><th>item</th><th class="money">qty</th><th class="money">unit</th><th class="money">line</th></tr></thead>
       <tbody>${lines || '<tr><td colspan="4" class="dim">no line items recorded</td></tr>'}</tbody></table>
       <div class="total"><span>Total</span><span>${money(order.total)} USD</span></div>
+    </div>
+
+    <div class="panel">
+      <h2>Where the money goes</h2>
+      ${splitRows || '<p class="dim">No split recorded for these items.</p>'}
+      ${sheetRows ? `<div class="total"><span>Split total</span><span>${cents(sheetRows.total)}</span></div>` : ''}
+      <p class="dim" style="font-size:.68rem;margin:.8rem 0 0;line-height:1.6">
+        Shares are integer basis points that must sum to 100%. Rounding uses largest-remainder, so the
+        parts always add up to the line total — no cent is created or lost.
+      </p>
     </div>
 
     <div class="panel">

@@ -10,6 +10,7 @@
  * turns red and says so, in the open, rather than printing a root nobody checked.
  */
 import { FACETS, rootOf, cidOfBytes, sha256Hex } from '/assets/provenance.js';
+import { DEFAULT_SPLIT } from '/assets/split.js';
 
 const SELFTEST_FACETS = { who: 'a', what: 'b', when: 'c', why: 'd', where: 'e', how: 'f' };
 const SELFTEST = '0xd6ba2579bb95ffdc39628a2af60fd669da5afe9af6ccca7aaf1777c275dc6221';
@@ -102,6 +103,8 @@ function productRecord(root) {
 		modelUrl: vessel ? `/assets/models/${vessel.name}` : '',
 		has3D: Boolean(vessel),
 		specs: { Media: vessel ? vessel.name : 'none', Poster: poster ? poster.name : 'none' },
+		// who the money goes to when this sells; a listing that cannot say is not sellable
+		split: DEFAULT_SPLIT,
 		provenance: {
 			schemaVersion: 1,
 			facets,
