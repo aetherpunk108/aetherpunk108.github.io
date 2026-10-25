@@ -753,7 +753,23 @@
       const invoiceId = 'INV-EH-2026-' + Math.floor(1000 + Math.random() * 9000);
       const dateStr = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
 
-      const ord = { invoiceId, date: dateStr, buyerName, buyerPhone, buyerEmail, paymentMethod, buyerNotes, items, total, idrTotal };
+      /**
+       * The receipt carries a snapshot of each signed listing, not a pointer.
+       * A pointer would let the catalogue change afterwards and leave the buyer holding a receipt
+       * for something that no longer verifies; the snapshot keeps what was actually sold.
+       */
+      const proofs = items
+        .filter((i) => i && (i.provenance?.root || i.signature))
+        .map((i) => ({
+          id: i.id,
+          title: i.title,
+          root: i.provenance?.root ?? null,
+          signedBy: i.signature?.did ?? null,
+          maker: i.creatorHandle ?? null,
+          listing: i
+        }));
+      const ord = { invoiceId, date: dateStr, buyerName, buyerPhone, buyerEmail, paymentMethod, buyerNotes, items, total, idrTotal, proofs,
+        receiptUrl: '/store/receipt.html?id=' + encodeURIComponent(invoiceId) };
       this.lastInvoice = ord;
 
       const orders = JSON.parse(localStorage.getItem('eh_vault_orders') || '[]');

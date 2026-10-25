@@ -98,8 +98,11 @@
     ? orders.slice().reverse().map(function (o) {
         const items = (o.items || []).map(function (i) { return (i.name || i.title || 'item') + ' × ' + (i.qty || 1); }).join(' · ');
         const when = o.date ? new Date(o.date).toLocaleDateString('en-GB') : '';
-        return '<div class="order"><div class="top"><strong>' + (o.id || 'order') + '</strong><span>' + (o.total ? money(o.total) : '') + '</span></div>' +
-          '<div class="items">' + (items || 'no line items recorded') + (when ? ' · ' + when : '') + '</div></div>';
+        const ref = o.invoiceId || o.id || '';
+        return '<div class="order"><div class="top"><strong>' + ref + '</strong><span>' + (o.total ? money(o.total) : '') + '</span></div>' +
+          '<div class="items">' + (items || 'no line items recorded') + (when ? ' · ' + when : '') + '</div>' +
+          (ref ? '<div style="margin-top:.5rem"><a class="btn ghost" style="padding:.3rem .7rem;font-size:.58rem" href="/store/receipt.html?id=' +
+            encodeURIComponent(ref) + '"><i class="fas fa-receipt"></i> receipt &amp; proof</a></div>' : '') + '</div>';
       }).join('')
     : '<p class="empty">No orders on this device yet. Orders are recorded in this browser after checkout.</p>';
 
