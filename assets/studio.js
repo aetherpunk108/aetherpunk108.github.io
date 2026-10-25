@@ -49,6 +49,8 @@ async function refresh() {
 	const ready = filled === FACETS.length && $('title').value.trim().length > 0;
 	$('btnJson').disabled = !ready;
 	$('btnPayload').disabled = !ready;
+	const pub = $('btnPublish');
+	if (pub) pub.disabled = !ready;
 
 	if (!filled) {
 		$('root').textContent = '—';
@@ -129,6 +131,56 @@ function show(title, text) {
 	$('dlg').showModal();
 }
 
+/**
+ * Publish a composed product into the creator's own catalogue.
+ *
+ * The listing is signed with the browser-held creator key over its final contents, so changing the
+ * price or the story afterwards breaks the signature — and the Atelier will say so. A static host
+ * cannot accept the GLB upload, so before claiming a 3D viewer this checks whether the model is
+ * actually reachable; if it is not, the listing says poster-only instead of showing a broken stage.
+ */
+async function publish() {
+  const root = $('btnJson').dataset.root;
+  if (!root) return state('compute the root first', 'bad');
+
+  const acc = window.EpinoiaAccount && window.EpinoiaAccount.current();
+  if (!acc) return state('sign in at the store first — a listing needs an owner', 'bad');
+  if (!acc.isCreator) return state('open the Atelier once to mint your key, then come back here', 'bad');
+
+  const rec = productRecord(root);
+  if (vessel) {
+    let present = false;
+    try {
+      const head = await fetch(rec.modelUrl, { method: 'HEAD' });
+      present = head.ok;
+    } catch (e) { present = false; }
+    if (!present) {
+      rec.has3D = false;
+      rec.assetMissing = true;
+      rec.specs = { ...rec.specs, Model: 'not hosted yet — commit it to assets/models/' };
+    }
+  }
+
+  const listing = { ...rec, owner: acc.id, creatorHandle: acc.handle, signedAt: new Date().toISOString() };
+  state('signing…', '');
+  const proof = await window.EpinoiaAccount.sign(listing);
+  listing.signature = proof;
+
+  const KEY = 'epinoia_custom_products_v3';
+  let list = [];
+  try { list = JSON.parse(localStorage.getItem(KEY) || '[]'); } catch (e) { list = []; }
+  const i = list.findIndex((p) => p && p.id === listing.id);
+  if (i >= 0) list[i] = listing; else list.push(listing);
+  localStorage.setItem(KEY, JSON.stringify(list));
+
+  const ok = await window.EpinoiaAccount.verify(rec, proof);
+  state(ok
+    ? `published "${listing.title}" — signed by ${proof.did.slice(0, 22)}…` + (listing.assetMissing ? ' (poster only: the .glb is not hosted)' : '')
+    : 'published, but the signature did not verify — do not trust this listing', ok ? 'ok' : 'bad');
+  if (ok) setTimeout(() => { location.href = '/store/creator.html'; }, 1200);
+}
+window.__studioPublish = publish;
+
 async function download() {
 	const rec = productRecord($('btnJson').dataset.root);
 	const blob = new Blob([JSON.stringify(rec, null, 2)], { type: 'application/json' });
@@ -167,6 +219,7 @@ $('title').addEventListener('input', () => refresh());
 $('vessel').addEventListener('change', onVessel);
 $('poster').addEventListener('change', onPoster);
 $('btnJson').addEventListener('click', download);
+$('btnPublish').addEventListener('click', publish);
 $('btnPayload').addEventListener('click', copyPayload);
 $('dlgClose').addEventListener('click', () => $('dlg').close());
 $('dlgCopy').addEventListener('click', async () => {
